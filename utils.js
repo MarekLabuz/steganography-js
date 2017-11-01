@@ -31,7 +31,7 @@ const w = (channelsHexLength, fn, ...rgbs) => {
   const r = rgbs.map(rgb => rgb ? rgb.slice(0, 2) : '00')
   const fR = fn(...r)
 
-  const g = rgbs.map(rgb => rgb ? rgb.slice(2, 4): '00')
+  const g = rgbs.map(rgb => rgb ? rgb.slice(2, 4) : '00')
   const fG = fn(...g)
 
   const b = rgbs.map(rgb => rgb ? rgb.slice(4, 6) : '00')
@@ -149,7 +149,7 @@ const processImageBeforeIDAT = imageChunks => imageChunks
 function transformPixelData (pixel, channelsHexLength, [b1, b2, b3]) {
   let binary = parseInt(pixel, 16).toString(2).padStart(channelsHexLength * 4, '0')
   let [r, g, b, a] = [binary.slice(0, 8), binary.slice(8, 16), binary.slice(16, 24), binary.slice(24)]
-  r = r.slice(0, -1) + (b1 || last(r)) 
+  r = r.slice(0, -1) + (b1 || last(r))
   g = g.slice(0, -1) + (b2 || last(g))
   b = b.slice(0, -1) + (b3 || last(b))
   binary = [r, g, b, a].join('')
@@ -216,10 +216,12 @@ function processImageIDATEncrypt (imageChunks, width, height, channelsHexLength,
 
 function * createReadableBinary (textHex) {
   for (let i = 0; i < textHex.length; i += 1) {
-    const bin = parseInt(textHex.slice(i, i + 1))
+    const bin = parseInt(textHex[i], 16)
       .toString(2)
       .padStart(4, '0')
       .split('')
+
+    // console.log(bin)
 
     while (bin.length) {
       yield bin.shift()
@@ -242,15 +244,29 @@ function processImageIDATDecrypt (imageChunks, width, height, channelsHexLength)
 
   let done = false
   let textBinary = ''
+
+  let bitesToRead = 20
+  let textLengthRead = false
+
   for (let i = 0; i < width; i += 1) {
     for (let j = 0; j < height; j += 1) {
       const binary = matrix[j][i]
-      let [r, g, b] = [binary.slice(0, 8), binary.slice(8, 16), binary.slice(16, 24)]
-      const b1 = r.charAt(7)
-      const b2 = b.charAt(7)
-      const b3 = g.charAt(7)
-      textBinary += b1 + b2 + b3
-      if (textBinary.length > 8) {
+      let [r, g, b] = [binary.slice(0, 2), binary.slice(2, 4), binary.slice(4, 6)].map(v => parseInt(v, 16).toString(2).padStart(8, '0'))
+
+      textBinary += r[7]
+      bitesToRead -= 1
+
+      textBinary += g[7]
+      bitesToRead -= 1
+      if (bitesToRead === 0 && !textLengthRead) {
+        textLengthRead = true
+        bitesToRead += parseInt(textBinary, 2) * 8
+      }
+
+      textBinary += b[7]
+      bitesToRead -= 1
+
+      if (bitesToRead <= 0) {
         done = true
       }
       if (done) {
@@ -262,7 +278,13 @@ function processImageIDATDecrypt (imageChunks, width, height, channelsHexLength)
     }
   }
 
-  return textBinary
+  textBinary = textBinary.slice(20)
+  let t = ''
+  for (let i = 0; i < textBinary.length; i += 8) {
+    t += String.fromCharCode(parseInt(textBinary.slice(i, i + 8), 2))
+  }
+
+  return t
 }
 
 module.exports = {

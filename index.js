@@ -46,7 +46,7 @@ yargs // eslint-disable-line no-unused-expressions
       const colorType = parseInt(IHDRdata.slice(18, 20), 16)
 
       const bitsImageCapacity = width * height * 3
-      const textBitsLength = textLengthInHex * 4 + textHexLength * 4
+      const textBitsLength = textLengthInHex.length * 4 + textHexLength * 4
 
       if (bitsImageCapacity < textBitsLength) {
         console.error(`Too long text for your image. Number of characters ${text.length} exceeds the image capacity by ${Math.ceil((textBitsLength - bitsImageCapacity) / 8)} characters.`)
@@ -88,13 +88,10 @@ yargs // eslint-disable-line no-unused-expressions
       const height = parseInt(IHDRdata.slice(8, 16), 16)
       const colorType = parseInt(IHDRdata.slice(18, 20), 16)
 
-      const bitsImageCapacity = width * height * 3
-
       const channelsHexLength = getChannelsHexLength(colorType)
 
       const text = processImageIDATDecrypt(imageChunks, width, height, channelsHexLength)
-
-      console.log('To')
+      console.log(text)
     }
   )
   .help()
