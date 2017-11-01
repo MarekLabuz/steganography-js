@@ -9,6 +9,10 @@ const toHex = (int, pL) => {
   return mod(int).toString(16).padStart(2, '0')
 }
 
+function last (arr) {
+  return arr[arr.length - 1]
+}
+
 function PaethPredictor (a, b, c) {
   const p = a + b - c
   const pa = Math.abs(p - a)
@@ -145,9 +149,9 @@ const processImageBeforeIDAT = imageChunks => imageChunks
 function transformPixelData (pixel, channelsHexLength, [b1, b2, b3]) {
   let binary = parseInt(pixel, 16).toString(2).padStart(channelsHexLength * 4, '0')
   let [r, g, b, a] = [binary.slice(0, 8), binary.slice(8, 16), binary.slice(16, 24), binary.slice(24)]
-  r = r.slice(0, -1) + b1
-  g = g.slice(0, -1) + b2
-  b = b.slice(0, -1) + b3
+  r = r.slice(0, -1) + (b1 || last(r)) 
+  g = g.slice(0, -1) + (b2 || last(g))
+  b = b.slice(0, -1) + (b3 || last(b))
   binary = [r, g, b, a].join('')
   return parseInt(binary, 2).toString(16).padStart(channelsHexLength, '0')
 }
@@ -167,10 +171,12 @@ function processImageIDATEncrypt (imageChunks, width, height, channelsHexLength,
       const bits = [textBinaryGenerator.next(), textBinaryGenerator.next(), textBinaryGenerator.next()]
       const b3 = bits[bits.length - 1]
       done = b3.done || b3.value === undefined
+
+      matrix[j][i] = transformPixelData(matrix[j][i], channelsHexLength, bits.map(v => v.value))
+
       if (done) {
         break
       }
-      matrix[j][i] = transformPixelData(matrix[j][i], channelsHexLength, bits.map(v => v.value))
     }
     if (done) {
       break
@@ -208,11 +214,11 @@ function processImageIDATEncrypt (imageChunks, width, height, channelsHexLength,
   return idats.reduce((acc, v) => Buffer.concat([acc, v.chunk]), Buffer.from([]))
 }
 
-function * createReadableBinary (binaryText) {
-  for (let i = 0; i < binaryText.length; i += 1) {
-    const bin = parseInt(Buffer.from(binaryText.slice(i, i + 1), 'ascii').toString('hex'))
+function * createReadableBinary (textHex) {
+  for (let i = 0; i < textHex.length; i += 1) {
+    const bin = parseInt(textHex.slice(i, i + 1))
       .toString(2)
-      .padStart(8, '0')
+      .padStart(4, '0')
       .split('')
 
     while (bin.length) {

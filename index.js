@@ -32,9 +32,10 @@ yargs // eslint-disable-line no-unused-expressions
     (argv) => {
       const { text, image, output } = argv
 
-      const textBits = Buffer.from(text, 'ascii').toString('hex')
-      const textBitsLength = textBits.length
-      const textBinaryGenerator = createReadableBinary(textBits)
+      const textHex = Buffer.from(text, 'ascii').toString('hex')
+      const textLengthInHex = text.length.toString(16).padStart(5, '0')
+      const textHexLength = textHex.length
+      const textBinaryGenerator = createReadableBinary(textLengthInHex + textHex)
 
       const imageHex = fs.readFileSync(image).toString('hex')
       const imageChunks = divideImageIntoChunks(imageHex)
@@ -45,9 +46,10 @@ yargs // eslint-disable-line no-unused-expressions
       const colorType = parseInt(IHDRdata.slice(18, 20), 16)
 
       const bitsImageCapacity = width * height * 3
+      const textBitsLength = textLengthInHex * 4 + textHexLength * 4
 
       if (bitsImageCapacity < textBitsLength) {
-        console.error(`Too long text for your image. Number of characters ${textBitsLength / 8} exceeds the image capacity by ${Math.ceil((textBitsLength - bitsImageCapacity) / 8)} characters.`)
+        console.error(`Too long text for your image. Number of characters ${text.length} exceeds the image capacity by ${Math.ceil((textBitsLength - bitsImageCapacity) / 8)} characters.`)
         process.exit(1)
       }
 
@@ -66,10 +68,6 @@ yargs // eslint-disable-line no-unused-expressions
       fs.writeFileSync(output, newImage)
     }
   )
-  .help()
-  .argv
-
-yargs // eslint-disable-line no-unused-expressions
   .command(
     'decrypt',
     'Decrypt image',
