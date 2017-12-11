@@ -29,15 +29,18 @@ yargs // eslint-disable-line no-unused-expressions
         default: 'output.png'
       }
     },
-    (argv) => {
+    async (argv) => {
       const { text, image, output } = argv
 
       const textHex = Buffer.from(text, 'ascii').toString('hex')
       const textLengthInHex = text.length.toString(16).padStart(5, '0')
       const textHexLength = textHex.length
+
       const textBinaryGenerator = createReadableBinary(textLengthInHex + textHex)
 
       const imageHex = fs.readFileSync(image).toString('hex')
+      console.log('\x1b[34mImage loaded ✓\x1b[0m')
+
       const imageChunks = divideImageIntoChunks(imageHex)
 
       const IHDRdata = imageChunks[1].data.toString('hex')
@@ -56,7 +59,7 @@ yargs // eslint-disable-line no-unused-expressions
       const channelsHexLength = getChannelsHexLength(colorType)
 
       const imageBufferBeforeIDAT = processImageBeforeIDAT(imageChunks)
-      const imageBufferIDAT = processImageIDATEncrypt(imageChunks, width, height, channelsHexLength, textBinaryGenerator)
+      const imageBufferIDAT = processImageIDATEncrypt(imageChunks, width, height, channelsHexLength, textBinaryGenerator, textBitsLength)
       const imageBufferAfterIDAT = processImageAfterIDAT(imageChunks)
 
       const newImage = Buffer.concat([
@@ -91,7 +94,8 @@ yargs // eslint-disable-line no-unused-expressions
       const channelsHexLength = getChannelsHexLength(colorType)
 
       const text = processImageIDATDecrypt(imageChunks, width, height, channelsHexLength)
-      console.log(text)
+
+      console.log(`\x1b[34mDecrypted message: \x1b[1m${text}\x1b[0m`)
     }
   )
   .help()

@@ -1,5 +1,14 @@
 const zlib = require('zlib')
 const CRC32 = require('crc-32')
+const log = require('single-line-log').stdout
+
+const progressBar = (title, counter, overall, unit = 'bytes', incBy = 1, n = 25) => {
+  counter += incBy
+  const percentage = Math.floor(100 * (counter / overall))
+  const numberOfBoxes = Math.floor(percentage / (100 / n))
+  log(`\x1b[34m${title.padEnd(27, ' ')}[${Array(numberOfBoxes).fill('█').join('').padEnd(n, '-')}] ${counter}/${overall} ${unit} (${percentage}%)\x1b[0m`)
+  return counter
+}
 
 const mod = (x, n = 256) => ((x % n) + n) % n
 
@@ -75,36 +84,51 @@ const convertStringToMatrix = (string, width, height, channelsHexLength) => {
   const rowLength = 2 + width * channelsHexLength
   const matrix = []
   const filters = []
+  let counter = 0
   for (let i = 0; i < string.length; i += rowLength) {
     const row = string.slice(i, i + rowLength)
     const [filterMethod, pixels] = [row.slice(0, 2), row.slice(2)]
     const rowArray = []
     for (let j = 0; j < pixels.length; j += channelsHexLength) {
       rowArray.push(pixels.slice(j, j + channelsHexLength))
+      counter = progressBar('IDAT Bytes to matrix:', counter, string.length / rowLength * pixels.length / channelsHexLength, 'bytes')
     }
     filters.push(filterMethod)
     matrix.push(rowArray)
   }
+
+  console.log()
+  counter = 0
+  const overallLength = matrix.length * matrix[0].length
   matrix.forEach((row, r) => {
     const filter = filtersMethods[filters[r]]
     row.forEach((column, c) => {
       matrix[r][c] = filter(matrix, r, c, channelsHexLength, true)
+      counter = progressBar('Defiltering image:', counter, overallLength, 'bytes')
     })
   })
   return { matrix, filters }
 }
 
 const convertMatrixToString = (matrix, filters, channelsHexLength) => {
+  console.log()
   let string = ''
+  let counter = 0
   const filteredMatrix = matrix
     .map((row, r) => {
       const filter = filtersMethods[filters[r]]
-      const newRow = row.map((columns, c) => filter(matrix, r, c, channelsHexLength))
+      const newRow = row.map((columns, c) => {
+        counter = progressBar('Matrix to IDAT bytes:', counter, matrix.length * row.length, 'bytes')
+        return filter(matrix, r, c, channelsHexLength)
+      })
       return newRow
     })
 
+  console.log()
+  counter = 0
   filteredMatrix.forEach((row, r) => {
     string += filters[r] + row.join('')
+    counter = progressBar('IDAT bytes concatenation:', counter, filteredMatrix.length, 'rows')
   })
 
   return string
@@ -139,6 +163,8 @@ function divideImageIntoChunks (imageHex) {
     i += 16 + 2 * length + 8
   }
 
+  console.log(`\x1b[34mImage structure analysed: ${imageChunks.length} chunks ✓\x1b[0m`)
+
   return imageChunks
 }
 
@@ -156,7 +182,7 @@ function transformPixelData (pixel, channelsHexLength, [b1, b2, b3]) {
   return parseInt(binary, 2).toString(16).padStart(channelsHexLength, '0')
 }
 
-function processImageIDATEncrypt (imageChunks, width, height, channelsHexLength, textBinaryGenerator) {
+function processImageIDATEncrypt (imageChunks, width, height, channelsHexLength, textBinaryGenerator, textBitsLength) {
   let imageIDATData = imageChunks
     .filter(v => v.type === 'IDAT')
     .reduce((acc, v) => Buffer.concat([acc, v.data]), Buffer.from([]))
@@ -165,6 +191,8 @@ function processImageIDATEncrypt (imageChunks, width, height, channelsHexLength,
 
   const { matrix, filters } = convertStringToMatrix(imageIDATData, width, height, channelsHexLength)
 
+  console.log()
+  let counter = 0
   let done = false
   for (let i = 0; i < width; i += 1) {
     for (let j = 0; j < height; j += 1) {
@@ -173,6 +201,7 @@ function processImageIDATEncrypt (imageChunks, width, height, channelsHexLength,
       done = b3.done || b3.value === undefined
 
       matrix[j][i] = transformPixelData(matrix[j][i], channelsHexLength, bits.map(v => v.value))
+      counter = progressBar('Text insertion:', counter, textBitsLength, 'bits', bits.filter(v => v.value).length)
 
       if (done) {
         break
@@ -189,6 +218,8 @@ function processImageIDATEncrypt (imageChunks, width, height, channelsHexLength,
 
   imageIDATData = zlib.deflateSync(imageIDATData).toString('hex')
 
+  console.log()
+  counter = 0
   const idats = []
   let i = 0
   const bytes = imageIDATData.length / 2
@@ -209,8 +240,10 @@ function processImageIDATEncrypt (imageChunks, width, height, channelsHexLength,
     i += length
 
     idats.push(idat)
+    counter = progressBar('Chunks concatenation:', counter, bytes, 'bytes', length)
   }
 
+  console.log()
   return idats.reduce((acc, v) => Buffer.concat([acc, v.chunk]), Buffer.from([]))
 }
 
@@ -220,8 +253,6 @@ function * createReadableBinary (textHex) {
       .toString(2)
       .padStart(4, '0')
       .split('')
-
-    // console.log(bin)
 
     while (bin.length) {
       yield bin.shift()
@@ -277,6 +308,9 @@ function processImageIDATDecrypt (imageChunks, width, height, channelsHexLength)
       break
     }
   }
+
+  console.log()
+  console.log(`\x1b[34mText read ✓\x1b[0m`)
 
   textBinary = textBinary.slice(20)
   let t = ''
